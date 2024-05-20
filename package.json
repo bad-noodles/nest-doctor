@@ -15,6 +15,7 @@
   ],
   "author": "Bad Noodles (https://github.com/bad-noodles/)",
   "license": "GPL",
+  "repository": "github:bad-noodles/nest-doctor",
   "dependencies": {
     "chalk": "^5.3.0",
     "diff": "^5.2.0",
