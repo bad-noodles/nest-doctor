@@ -6,6 +6,10 @@ reading the cryptic error messages that nest provides, matching it
 against your code, and providing a suggestion on how to fix it
 (or at least extra information to make it easier to debug).
 
+## Demo
+
+![nest-doctor](https://github.com/bad-noodles/nest-doctor/blob/main/nest-doctor.gif)
+
 ## Instalation
 
 ```sh
