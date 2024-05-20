@@ -1,0 +1,29 @@
+{
+  "name": "nest-doctor",
+  "version": "0.0.1",
+  "description": "",
+  "main": "dist/index.js",
+  "bin": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsup src/index.ts --format esm",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "diff": "^5.2.0",
+    "inquirer": "^9.2.22",
+    "ts-morph": "^22.0.0"
+  },
+  "devDependencies": {
+    "@types/diff": "^5.2.1",
+    "@types/inquirer": "^9.0.7",
+    "@types/node": "^20.12.12",
+    "esrun": "^3.2.26",
+    "tsup": "^8.0.2",
+    "typescript": "^5.4.5"
+  }
+}
