@@ -9,8 +9,7 @@
   "type": "module",
   "scripts": {
     "build": "tsup src/index.ts --format esm",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "publish": "npm run build && npm publish"
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
     "nest",

@@ -27,12 +27,17 @@ import { stderr, stdout } from "process";
 // src/options.ts
 import { argv } from "process";
 var options = {
-  auto: false
+  auto: false,
+  reckless: false
 };
 argv.forEach((val) => {
   switch (val) {
     case "--auto":
       options.auto = true;
+      break;
+    case "--reckless":
+      options.auto = true;
+      options.reckless = true;
       break;
   }
 });
@@ -56,6 +61,12 @@ var Module = class {
   get filePath() {
     return this.sourceFile.getFilePath();
   }
+  getClass() {
+    const cd = this.getClassDefinition();
+    if (cd === void 0)
+      return cd;
+    return new Class(cd);
+  }
   getClassDefinition() {
     return this.sourceFile.getClasses().find((c) => c.getDecorator("Module"));
   }
@@ -63,9 +74,43 @@ var Module = class {
     var _a, _b;
     return (_b = (_a = this.getClassDefinition()) == null ? void 0 : _a.getDecorator("Module")) == null ? void 0 : _b.getArguments()[0].asKind(SyntaxKind.ObjectLiteralExpression);
   }
-  getProviderArray() {
+  getProvidersArray() {
     var _a, _b, _c;
     return (_c = (_b = (_a = this.getModuleDefiniton()) == null ? void 0 : _a.getProperty("providers")) == null ? void 0 : _b.getLastChild()) == null ? void 0 : _c.asKind(SyntaxKind.ArrayLiteralExpression);
+  }
+  getOrCreateProviderArray() {
+    var _a, _b;
+    let pa = this.getProvidersArray();
+    if (pa) {
+      return pa;
+    }
+    const ass = (_a = this.getModuleDefiniton()) == null ? void 0 : _a.addPropertyAssignment({
+      name: "providers",
+      initializer: "[]"
+    });
+    pa = (_b = ass == null ? void 0 : ass.getLastChild()) == null ? void 0 : _b.asKind(SyntaxKind.ArrayLiteralExpression);
+    if (!pa) {
+      throw new Error("Could not create providers array");
+    }
+    return pa;
+  }
+  hasProvider(c) {
+    const providerArray = this.getProvidersArray();
+    if (!providerArray) {
+      return false;
+    }
+    return !!providerArray.getElements().find((p) => p.getType().getText() === c.type);
+  }
+  addProvider(provider) {
+    const isDefault = provider.isDefaultExport();
+    const importPath = `./${this.sourceFile.getRelativePathTo(provider.filePath).replace(/\.ts$/, "")}`;
+    const providerArray = this.getOrCreateProviderArray();
+    this.sourceFile.addImportDeclaration({
+      moduleSpecifier: importPath,
+      namedImports: isDefault ? [] : [provider.name],
+      defaultImport: isDefault ? provider.name : void 0
+    });
+    providerArray.addElement(provider.name);
   }
   getImportsArray() {
     var _a, _b, _c;
@@ -87,36 +132,6 @@ var Module = class {
     }
     return ia;
   }
-  getClass() {
-    const cd = this.getClassDefinition();
-    if (cd === void 0)
-      return cd;
-    return new Class(cd);
-  }
-  hasProvider(c) {
-    const providerArray = this.getProviderArray();
-    if (!providerArray) {
-      return false;
-    }
-    return !!providerArray.getElements().find((p) => p.getType().getText() === c.type);
-  }
-  save() {
-    this.sourceFile.saveSync();
-  }
-  addProvider(provider) {
-    const isDefault = provider.isDefaultExport();
-    const importPath = `./${this.sourceFile.getRelativePathTo(provider.filePath).replace(/\.ts$/, "")}`;
-    const providerArray = this.getProviderArray();
-    if (!providerArray) {
-      throw new Error("Missing provider array");
-    }
-    this.sourceFile.addImportDeclaration({
-      moduleSpecifier: importPath,
-      namedImports: isDefault ? [] : [provider.name],
-      defaultImport: isDefault ? provider.name : void 0
-    });
-    providerArray.addElement(provider.name);
-  }
   addImport(mod) {
     const modClass = mod.getClass();
     if (!modClass) {
@@ -131,6 +146,40 @@ var Module = class {
       defaultImport: isDefault ? modClass.name : void 0
     });
     importsArray.addElement(modClass.name);
+  }
+  hasExports(c) {
+    const exportsArray = this.getExportsArray();
+    if (!exportsArray) {
+      return false;
+    }
+    return !!exportsArray.getElements().find((p) => p.getType().getText() === c.type);
+  }
+  getExportsArray() {
+    var _a, _b, _c;
+    return (_c = (_b = (_a = this.getModuleDefiniton()) == null ? void 0 : _a.getProperty("exports")) == null ? void 0 : _b.getLastChild()) == null ? void 0 : _c.asKind(SyntaxKind.ArrayLiteralExpression);
+  }
+  getOrCreateExportsArray() {
+    var _a, _b;
+    let ea = this.getExportsArray();
+    if (ea) {
+      return ea;
+    }
+    const ass = (_a = this.getModuleDefiniton()) == null ? void 0 : _a.addPropertyAssignment({
+      name: "exports",
+      initializer: "[]"
+    });
+    ea = (_b = ass == null ? void 0 : ass.getLastChild()) == null ? void 0 : _b.asKind(SyntaxKind.ArrayLiteralExpression);
+    if (!ea) {
+      throw new Error("Could not create exports array");
+    }
+    return ea;
+  }
+  addExports(c) {
+    const exportsArray = this.getOrCreateExportsArray();
+    exportsArray.addElement(c.name);
+  }
+  save() {
+    this.sourceFile.saveSync();
   }
   diff() {
     const diff = diffChars(this.original, this.sourceFile.getFullText());
@@ -280,17 +329,42 @@ var MissingDependency = class extends Handler {
   }
   solveDifferentModule(mod, dependency) {
     return __async(this, null, function* () {
+      let autoSave = options.auto;
+      let dependencyModChanged = false;
       const dependencyMod = dependency.getModule();
       if (!dependencyMod) {
         return false;
       }
+      process.stdout.write(chalk2.bold("\n\u{1FA7A} It seems like your dependency is in a different module \n"));
+      if (!dependencyMod.hasProvider(dependency)) {
+        process.stdout.write(chalk2.bold("\n\u{1FA7A} The dependency is not mapped as a provider \n"));
+        dependencyMod.addProvider(dependency);
+        dependencyModChanged = true;
+      }
+      if (!dependencyMod.hasExports(dependency)) {
+        process.stdout.write(chalk2.bold("\n\u{1FA7A} The dependency is not being exported, and thus not available for other modules\n"));
+        dependencyMod.addExports(dependency);
+        if (options.auto) {
+          process.stdout.write(chalk2.bold("\n\u{1FA7A} Exporting a provider breaks a boundary between modules and the doctor will cowardly avoid auto-applying it. Pass the --reckless flag to change this behavior\n"));
+        }
+        autoSave = options.reckless;
+        dependencyModChanged = true;
+      }
+      if (dependencyModChanged) {
+        process.stdout.write(`
+\u{1F4C4} ${dependencyMod.filePath}
+`);
+        process.stdout.write(dependencyMod.diff());
+      }
       mod.addImport(dependencyMod);
-      process.stdout.write(chalk2.bold("\n\u{1FA7A} It seems like you just need to import another module that provides the dependency\n\n"));
-      process.stdout.write(`\u{1F4C4} ${mod.filePath}
+      process.stdout.write(chalk2.bold("\n\u{1FA7A} You need to import another module that provides the dependency\n\n"));
+      process.stdout.write(`
+\u{1F4C4} ${mod.filePath}
 `);
       process.stdout.write(mod.diff());
-      if (options.auto) {
+      if (autoSave) {
         mod.save();
+        dependencyMod.save();
         return true;
       }
       const response = yield inquirer.prompt([{
