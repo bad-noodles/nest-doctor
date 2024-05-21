@@ -17,6 +17,14 @@ export class Module {
     return this.sourceFile.getFilePath()
   }
 
+  getClass(): Class | undefined {
+    const cd = this.getClassDefinition()
+
+    if (cd === undefined) return cd
+
+    return new Class(cd)
+  }
+
   private getClassDefinition() {
     return this.sourceFile.getClasses().find(c => c.getDecorator('Module'))
   }
@@ -25,8 +33,53 @@ export class Module {
     return this.getClassDefinition()?.getDecorator('Module')?.getArguments()[0].asKind(SyntaxKind.ObjectLiteralExpression)
   }
 
-  private getProviderArray(): ArrayLiteralExpression | undefined {
+  private getProvidersArray(): ArrayLiteralExpression | undefined {
     return this.getModuleDefiniton()?.getProperty('providers')?.getLastChild()?.asKind(SyntaxKind.ArrayLiteralExpression)
+  }
+
+  private getOrCreateProviderArray(): ArrayLiteralExpression {
+    let pa = this.getProvidersArray()
+
+
+    if (pa) {
+      return pa
+    }
+
+    const ass = this.getModuleDefiniton()?.addPropertyAssignment({
+      name: 'providers',
+      initializer: '[]',
+    })
+    pa = ass?.getLastChild()?.asKind(SyntaxKind.ArrayLiteralExpression)
+
+    if (!pa) {
+      throw new Error('Could not create providers array')
+    }
+
+    return pa
+  }
+
+  hasProvider(c: Class): boolean {
+    const providerArray = this.getProvidersArray()
+
+    if (!providerArray) {
+      return false
+    }
+
+    return !!providerArray.getElements().find((p) => p.getType().getText() === c.type)
+  }
+
+  addProvider(provider: Class) {
+    const isDefault = provider.isDefaultExport()
+    const importPath = `./${this.sourceFile.getRelativePathTo(provider.filePath).replace(/\.ts$/, '')}`
+    const providerArray = this.getOrCreateProviderArray()
+
+    this.sourceFile.addImportDeclaration({
+      moduleSpecifier: importPath,
+      namedImports: isDefault ? [] : [provider.name],
+      defaultImport: isDefault ? provider.name : undefined,
+    })
+
+    providerArray.addElement(provider.name)
   }
 
   private getImportsArray(): ArrayLiteralExpression | undefined {
@@ -54,48 +107,6 @@ export class Module {
     return ia
   }
 
-  getClass(): Class | undefined {
-    const cd = this.getClassDefinition()
-
-    if (cd === undefined) return cd
-
-    return new Class(cd)
-  }
-
-  hasProvider(c: Class): boolean {
-    const providerArray = this.getProviderArray()
-
-    if (!providerArray) {
-      return false
-    }
-
-    return !!providerArray.getElements().find((p) => p.getType().getText() === c.type)
-  }
-
-
-  save() {
-    this.sourceFile.saveSync()
-  }
-
-
-  addProvider(provider: Class) {
-    const isDefault = provider.isDefaultExport()
-    const importPath = `./${this.sourceFile.getRelativePathTo(provider.filePath).replace(/\.ts$/, '')}`
-    const providerArray = this.getProviderArray()
-
-    if (!providerArray) {
-      throw new Error('Missing provider array')
-    }
-
-    this.sourceFile.addImportDeclaration({
-      moduleSpecifier: importPath,
-      namedImports: isDefault ? [] : [provider.name],
-      defaultImport: isDefault ? provider.name : undefined,
-    })
-
-    providerArray.addElement(provider.name)
-  }
-
   addImport(mod: Module) {
     const modClass = mod.getClass()
 
@@ -115,6 +126,52 @@ export class Module {
 
     importsArray.addElement(modClass.name)
 
+  }
+
+  hasExports(c: Class): boolean {
+    const exportsArray = this.getExportsArray()
+
+    if (!exportsArray) {
+      return false
+    }
+
+    return !!exportsArray.getElements().find((p) => p.getType().getText() === c.type)
+  }
+
+  private getExportsArray(): ArrayLiteralExpression | undefined {
+    return this.getModuleDefiniton()?.getProperty('exports')?.getLastChild()?.asKind(SyntaxKind.ArrayLiteralExpression)
+  }
+
+  private getOrCreateExportsArray(): ArrayLiteralExpression {
+    let ea = this.getExportsArray()
+
+
+    if (ea) {
+      return ea
+    }
+
+    const ass = this.getModuleDefiniton()?.addPropertyAssignment({
+      name: 'exports',
+      initializer: '[]',
+    })
+    ea = ass?.getLastChild()?.asKind(SyntaxKind.ArrayLiteralExpression)
+
+    if (!ea) {
+      throw new Error('Could not create exports array')
+    }
+
+    return ea
+  }
+
+  addExports(c: Class) {
+    const exportsArray = this.getOrCreateExportsArray()
+
+
+    exportsArray.addElement(c.name)
+  }
+
+  save() {
+    this.sourceFile.saveSync()
   }
 
   diff(): string {

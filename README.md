@@ -42,6 +42,10 @@ So your nest-doctor usage would be:
 nest-doctor --auto
 ```
 
+The --auto flag will not break the boundaries between modules, meaning it will
+not export a provider from a module without checking with the developer first.
+To overwrite that behaviour, use the --reckless flag instead.
+
 ## Cases
 
 There are, currently, two cases the doctor takes care of. More will come in the future.
@@ -51,9 +55,9 @@ There are, currently, two cases the doctor takes care of. More will come in the 
 When you create a new provider but forget to add it to your module's provider array
 before requiring it somewhere else within the same module.
 
-### Missing a dependency that is exported from a different module
+### Missing a dependency from a different module
 
-When you start depending on a provider that is exported from another module,
+When you start depending on a provider that is in another module,
 but the module that provides it is not imported on your current module.
 
 ## Caveats

@@ -66,24 +66,48 @@ export class MissingDependency extends Handler {
   }
 
   private async solveDifferentModule(mod: Module, dependency: Class): Promise<boolean> {
+    let autoSave = options.auto
+    let dependencyModChanged = false
     const dependencyMod = dependency.getModule()
 
     if (!dependencyMod) {
       return false
     }
 
-    // if (!dependencyMod.hasProvider(dependency)) {
-    //   dependencyMod.addProvider(dependency)
-    // }
+    process.stdout.write(chalk.bold("\n🩺 It seems like your dependency is in a different module \n"))
+
+    if (!dependencyMod.hasProvider(dependency)) {
+      process.stdout.write(chalk.bold("\n🩺 The dependency is not mapped as a provider \n"))
+      dependencyMod.addProvider(dependency)
+      dependencyModChanged = true
+    }
+
+    if (!dependencyMod.hasExports(dependency)) {
+      process.stdout.write(chalk.bold("\n🩺 The dependency is not being exported, and thus not available for other modules\n"))
+      dependencyMod.addExports(dependency)
+
+      if (options.auto) {
+        process.stdout.write(chalk.bold("\n🩺 Exporting a provider breaks a boundary between modules and the doctor will cowardly avoid auto-applying it. Pass the --reckless flag to change this behavior\n"))
+      }
+      autoSave = options.reckless
+      dependencyModChanged = true
+    }
+
+    if (dependencyModChanged) {
+      process.stdout.write(`\n📄 ${dependencyMod.filePath}\n`)
+      process.stdout.write(dependencyMod.diff())
+
+    }
 
     mod.addImport(dependencyMod)
 
-    process.stdout.write(chalk.bold("\n🩺 It seems like you just need to import another module that provides the dependency\n\n"))
-    process.stdout.write(`📄 ${mod.filePath}\n`)
+    process.stdout.write(chalk.bold("\n🩺 You need to import another module that provides the dependency\n\n"))
+    process.stdout.write(`\n📄 ${mod.filePath}\n`)
     process.stdout.write(mod.diff())
 
-    if (options.auto) {
+    if (autoSave) {
       mod.save()
+      dependencyMod.save()
       return true
     }
 
